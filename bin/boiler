@@ -1,0 +1,177 @@
+#!/usr/bin/python
+
+
+import argparse
+import json
+import logging
+import os
+import shutil
+
+
+class ConfigError(Exception): pass
+
+
+class Config(object):
+    def __init__(self):
+        self.directory = os.path.expanduser('~/.boiler')
+        self.filename = 'config.json'
+        self.abs_path = os.path.join(self.directory, self.filename)
+        self.config = {
+            'version': '0.1.0',
+            'boilerplates': {
+            },
+        }
+
+    def initialize(self):
+        # check and initialize ~/.boiler directory
+        if not os.path.exists(self.directory):
+            logging.info('Creating config directory: {}'.format(self.directory))
+            os.makedirs(self.directory)
+
+        # check and initialize config file self.abs_path
+        if not os.path.exists(self.abs_path):
+            logging.info('Creating config: {}'.format(self.abs_path))
+            self.save()
+        else:
+            self.load_file()
+
+    def save(self):
+        f_obj = open(self.abs_path, 'w')
+        f_obj.write(json.dumps(self.config, indent=4))
+        f_obj.close()
+
+    def load_file(self):
+        self.config = json.loads(open(self.abs_path, 'r').read())
+
+    @property
+    def boilerplates(self):
+        return self.config.get('boilerplates', {})
+
+    @staticmethod
+    def ensure_dir(file_path):
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.makedirs(directory) 
+
+    def add_boilerplate(self, name, target):
+        if name in self.boilerplates:
+            err_msg = '"{}" already exists. Please remove or choose a ' \
+                      'unique name'.format(name)
+
+            logging.error(err_msg)
+            return None
+
+        target_basename = os.path.basename(target)
+        if not target_basename:
+            err_msg = '"{}" is not a file or a directory.'.format(target)
+
+            logging.error(err_msg)
+            return None
+
+        boilerplate_path = os.path.join(self.directory, 'boilerplates', name,
+                                        target_basename)
+
+        self.ensure_dir(boilerplate_path)
+        if not os.path.isdir(target):
+            shutil.copyfile(target, boilerplate_path)
+        else:
+            shutil.copytree(target, boilerplate_path)
+
+        # TODO: store just the last bit of directory to avoid /dlfjka/sdflk/dsflkaj in path
+        self.config.get('boilerplates', {})[name] = boilerplate_path
+        self.save()
+
+    def remove_boilerplate(self, name):
+        if name not in self.boilerplates:
+            err_msg = '"{}" does not exist.'.format(name)
+            logging.error(err_msg)
+            return None
+
+        boilerplate_path = os.path.join(self.directory, 'boilerplates', name)
+        try:
+            shutil.rmtree(boilerplate_path)
+        except Exception as err:
+            logging.error('Unable to remove boilerplate target file(s) {}: {}'.format(boilerplate_path, err))
+
+        del self.boilerplates[name]
+        self.save()
+        logging.info('Removed boilerplate {}'.format(name))
+
+    def get_boilerplate_path(self, name):
+        return self.config.get('boilerplates', {})[name]
+
+
+def set_logger(is_verbose=False):
+    level = logging.WARNING
+    if is_verbose:
+        level = logging.DEBUG
+    logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
+
+
+def list_boilerplates(config):
+    print('Available boilerplates')
+    for name in sorted(config.boilerplates.keys()):
+        print('    {}'.format(name))
+
+
+def create_boilerplate(config, name, target):
+    path = config.get_boilerplate_path(name)
+    if os.path.exists(target):
+        logging.error('Unable to create file/directory. Already exists: '
+                      '{}'.format(target))
+        return None
+
+    if not os.path.isdir(path):
+        shutil.copyfile(path, target)
+    else:
+        shutil.copytree(path, target)
+
+
+def setup_args():
+    parser = argparse.ArgumentParser(
+        description='CLI for creating boilerplate files, directories, and '
+                    'structures')
+    parser.add_argument('-v', dest='is_verbose', action='store_true',
+                        help='Verbose mode to print more information')
+
+    subparsers = parser.add_subparsers(help='Sub-command help', dest='command')
+    list_parser = subparsers.add_parser('list', help='List all saved boilerplates')
+    add_parser = subparsers.add_parser('add', help='Add boilerplate')
+    remove_parser = subparsers.add_parser('rm', help='Remove boilerplates')
+    create_parser = subparsers.add_parser('create', help='Create boilerplate')
+
+    add_parser.add_argument('name', type=str,
+                            help='Name for the boilerplate to be used during '
+                                 '"create" command')
+    add_parser.add_argument('target', type=str,
+                            help='target file/directory to be copied to '
+                                 'prepare as boilerplate')
+
+    remove_parser.add_argument('name', type=str,
+                               help='Name for the boilerplate to be removed')
+
+    create_parser.add_argument('name', type=str,
+                               help='Name for the boilerplate to be used '
+                                    'during "create" command')
+    create_parser.add_argument('target', type=str,
+                               help='target file/directory to be copied to '
+                                    'prepare as boilerplate')
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = setup_args()
+    set_logger(is_verbose=args.is_verbose)
+
+    config = Config()
+    config.initialize()
+
+    if args.command == 'list':
+        list_boilerplates(config)
+    elif args.command == 'add':
+        config.add_boilerplate(name=args.name, target=args.target)
+    elif args.command == 'rm':
+        config.remove_boilerplate(name=args.name)
+    elif args.command == 'create':
+        create_boilerplate(config, name=args.name, target=args.target)
