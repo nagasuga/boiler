@@ -24,6 +24,7 @@ positional arguments:
   {list,add,rm,create}  Sub-command help
     list                List all saved boilerplates
     add                 Add boilerplate
+    get                 Downloads boilerplate from repository and set it up in given destination
     rm                  Remove boilerplates
     create              Create boilerplate
 

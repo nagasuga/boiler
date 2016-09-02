@@ -1,14 +1,21 @@
 #!/usr/bin/python
 
-
+from __future__ import print_function
 import argparse
 import json
 import logging
 import os
 import shutil
+try:
+    from cStringIO import StringIO
+except:
+    from StringIO import StringIO
+import urllib2
+import zipfile
 
 
-class ConfigError(Exception): pass
+class ConfigError(Exception):
+    pass
 
 
 class Config(object):
@@ -114,6 +121,20 @@ def list_boilerplates(config):
         print('    {}'.format(name))
 
 
+def get_boilerplate(name, src_path):
+    print('Getting boilerplate', src_path)
+
+    branch = 'master'
+    uri = 'https://{}/archive/{}.zip'.format(src_path, branch)
+    resp = urllib2.urlopen(uri)
+    f_obj = StringIO(resp.read())
+    zip_obj = zipfile.ZipFile(f_obj, 'r')
+    zip_obj.extractall()
+
+    orig = '{}-{}'.format(src_path.split('/')[-1], branch)
+    os.rename(orig, name)
+
+
 def create_boilerplate(config, name, target):
     path = config.get_boilerplate_path(name)
     if os.path.exists(target):
@@ -137,6 +158,7 @@ def setup_args():
     subparsers = parser.add_subparsers(help='Sub-command help', dest='command')
     list_parser = subparsers.add_parser('list', help='List all saved boilerplates')
     add_parser = subparsers.add_parser('add', help='Add boilerplate')
+    get_parser = subparsers.add_parser('get', help='Get/Pull boilerplate')
     remove_parser = subparsers.add_parser('rm', help='Remove boilerplates')
     create_parser = subparsers.add_parser('create', help='Create boilerplate')
 
@@ -146,6 +168,10 @@ def setup_args():
     add_parser.add_argument('target', type=str,
                             help='target file/directory to be copied to '
                                  'prepare as boilerplate')
+
+    get_parser.add_argument('path', type=str, help='Path to the boilerplate)')
+    get_parser.add_argument('destination', type=str,
+                            help='Destination of the boilerplate to be saved')
 
     remove_parser.add_argument('name', type=str,
                                help='Name for the boilerplate to be removed')
@@ -169,6 +195,8 @@ if __name__ == '__main__':
 
     if args.command == 'list':
         list_boilerplates(config)
+    if args.command == 'get':
+        get_boilerplate(args.destination, args.path)
     elif args.command == 'add':
         config.add_boilerplate(name=args.name, target=args.target)
     elif args.command == 'rm':
