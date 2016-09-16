@@ -69,8 +69,6 @@ class Boilerplates(object):
             os.makedirs(self.boiler_dir)
 
     def pull(self, src_path, name):
-        print('boilerplate.pull', src_path)
-
         branch = 'master'
         uri = 'https://{}/archive/{}.zip'.format(src_path, branch)
         resp = urllib2.urlopen(uri)
