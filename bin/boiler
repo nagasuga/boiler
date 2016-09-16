@@ -124,19 +124,6 @@ def set_logger(is_verbose=False):
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
 
 
-def create_boilerplate(config, name, target):
-    path = config.get_boilerplate_path(name)
-    if os.path.exists(target):
-        logging.error('Unable to create file/directory. Already exists: '
-                      '{}'.format(target))
-        return None
-
-    if not os.path.isdir(path):
-        shutil.copyfile(path, target)
-    else:
-        shutil.copytree(path, target)
-
-
 def setup_args():
     parser = argparse.ArgumentParser(
         description='CLI for creating boilerplate files, directories, and '
