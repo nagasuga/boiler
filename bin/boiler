@@ -14,98 +14,108 @@ import urllib2
 import zipfile
 
 
-class ConfigError(Exception):
-    pass
+VERSION = '0.2.0'
 
 
 class Config(object):
-    def __init__(self):
-        self.directory = os.path.expanduser('~/.boiler')
-        self.filename = 'config.json'
-        self.abs_path = os.path.join(self.directory, self.filename)
+    def __init__(self, file_path):
+        self.file_path = file_path
         self.config = {
-            'version': '0.1.0',
+            'version': VERSION,
             'boilerplates': {
             },
         }
+        self.initialize()
+
+    def initialize(self):
+        print('Config.init', self.file_path)
+        if not os.path.exists(self.file_path):
+            logging.info('Creating config: {}'.format(self.file_path))
+            self.save()
+        else:
+            self.load()
+
+        if self.config['version'] < VERSION:
+            self.update_version()
+
+    def save(self):
+        with open(self.file_path, 'w') as f_obj:
+            f_obj.write(json.dumps(self.config, indent=4))
+
+    def load(self):
+        self.config = json.loads(open(self.file_path, 'r').read())
+
+    def update_version(self):
+        self.config['version'] = VERSION
+        self.save()
+
+
+class Boilerplates(object):
+    def __init__(self, root_dir='~/.boiler'):
+        self.root_dir = os.path.expanduser(root_dir)
+        self.boiler_dir = os.path.join(self.root_dir, 'boilerplates')
+        self.initialize()
+
+        config_path = os.path.join(self.root_dir , 'config.json')
+        self.config = Config(file_path=config_path)
 
     def initialize(self):
         # check and initialize ~/.boiler directory
-        if not os.path.exists(self.directory):
-            logging.info('Creating config directory: {}'.format(self.directory))
-            os.makedirs(self.directory)
+        if not os.path.exists(self.root_dir):
+            logging.info('Creating config directory: {}'.format(self.root_dir))
+            os.makedirs(self.root_dir)
 
-        # check and initialize config file self.abs_path
-        if not os.path.exists(self.abs_path):
-            logging.info('Creating config: {}'.format(self.abs_path))
-            self.save()
-        else:
-            self.load_file()
+        if not os.path.exists(self.boiler_dir):
+            logging.info('Creating config directory: {}'.format(self.boiler_dir))
+            os.makedirs(self.boiler_dir)
 
-    def save(self):
-        f_obj = open(self.abs_path, 'w')
-        f_obj.write(json.dumps(self.config, indent=4))
-        f_obj.close()
+    def pull(self, src_path, name):
+        print('boilerplate.pull', src_path)
 
-    def load_file(self):
-        self.config = json.loads(open(self.abs_path, 'r').read())
+        branch = 'master'
+        uri = 'https://{}/archive/{}.zip'.format(src_path, branch)
+        resp = urllib2.urlopen(uri)
+        f_obj = StringIO(resp.read())
+        zip_obj = zipfile.ZipFile(f_obj, 'r')
+        zip_obj.extractall()
 
-    @property
-    def boilerplates(self):
-        return self.config.get('boilerplates', {})
+        orig = '{}-{}'.format(src_path.split('/')[-1], branch)
+        dest = os.path.join(self.boiler_dir, name)
+        os.rename(orig, dest)
 
-    @staticmethod
-    def ensure_dir(file_path):
-        directory = os.path.dirname(file_path)
-        if not os.path.exists(directory):
-            os.makedirs(directory) 
+    def _raw_boilers(self):
+        return os.listdir(self.boiler_dir)
 
-    def add_boilerplate(self, name, target):
-        if name in self.boilerplates:
-            err_msg = '"{}" already exists. Please remove or choose a ' \
-                      'unique name'.format(name)
+    def list(self):
+        print('Available boilerplates')
+        for item in self._raw_boilers():
+            print('    {}'.format(item))
 
-            logging.error(err_msg)
-            return None
-
-        target_basename = os.path.basename(target)
-        if not target_basename:
-            err_msg = '"{}" is not a file or a directory.'.format(target)
-
-            logging.error(err_msg)
-            return None
-
-        boilerplate_path = os.path.join(self.directory, 'boilerplates', name,
-                                        target_basename)
-
-        self.ensure_dir(boilerplate_path)
-        if not os.path.isdir(target):
-            shutil.copyfile(target, boilerplate_path)
-        else:
-            shutil.copytree(target, boilerplate_path)
-
-        # TODO: store just the last bit of directory to avoid /dlfjka/sdflk/dsflkaj in path
-        self.config.get('boilerplates', {})[name] = boilerplate_path
-        self.save()
-
-    def remove_boilerplate(self, name):
-        if name not in self.boilerplates:
+    def remove(self, name):
+        if name not in self._raw_boilers():
             err_msg = '"{}" does not exist.'.format(name)
             logging.error(err_msg)
             return None
 
-        boilerplate_path = os.path.join(self.directory, 'boilerplates', name)
+        boilerplate_path = os.path.join(self.boiler_dir, name)
         try:
             shutil.rmtree(boilerplate_path)
         except Exception as err:
             logging.error('Unable to remove boilerplate target file(s) {}: {}'.format(boilerplate_path, err))
 
-        del self.boilerplates[name]
-        self.save()
         logging.info('Removed boilerplate {}'.format(name))
 
-    def get_boilerplate_path(self, name):
-        return self.config.get('boilerplates', {})[name]
+    def create(self, name, target):
+        boilerplate_path = os.path.join(self.boiler_dir, name)
+        if os.path.exists(target):
+            logging.error('Unable to create file/directory. Already exists: '
+                          '{}'.format(target))
+            return None
+
+        if not os.path.isdir(boilerplate_path):
+            shutil.copyfile(boilerplate_path, target)
+        else:
+            shutil.copytree(boilerplate_path, target)
 
 
 def set_logger(is_verbose=False):
@@ -113,26 +123,6 @@ def set_logger(is_verbose=False):
     if is_verbose:
         level = logging.DEBUG
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
-
-
-def list_boilerplates(config):
-    print('Available boilerplates')
-    for name in sorted(config.boilerplates.keys()):
-        print('    {}'.format(name))
-
-
-def get_boilerplate(name, src_path):
-    print('Getting boilerplate', src_path)
-
-    branch = 'master'
-    uri = 'https://{}/archive/{}.zip'.format(src_path, branch)
-    resp = urllib2.urlopen(uri)
-    f_obj = StringIO(resp.read())
-    zip_obj = zipfile.ZipFile(f_obj, 'r')
-    zip_obj.extractall()
-
-    orig = '{}-{}'.format(src_path.split('/')[-1], branch)
-    os.rename(orig, name)
 
 
 def create_boilerplate(config, name, target):
@@ -156,22 +146,15 @@ def setup_args():
                         help='Verbose mode to print more information')
 
     subparsers = parser.add_subparsers(help='Sub-command help', dest='command')
-    list_parser = subparsers.add_parser('list', help='List all saved boilerplates')
-    add_parser = subparsers.add_parser('add', help='Add boilerplate')
-    get_parser = subparsers.add_parser('get', help='Get/Pull boilerplate')
+    pull_parser = subparsers.add_parser('pull', help='Download boilerplate')
+    list_parser = subparsers.add_parser('ls', help='List all saved boilerplates')
     remove_parser = subparsers.add_parser('rm', help='Remove boilerplates')
     create_parser = subparsers.add_parser('create', help='Create boilerplate')
 
-    add_parser.add_argument('name', type=str,
-                            help='Name for the boilerplate to be used during '
-                                 '"create" command')
-    add_parser.add_argument('target', type=str,
-                            help='target file/directory to be copied to '
-                                 'prepare as boilerplate')
-
-    get_parser.add_argument('path', type=str, help='Path to the boilerplate)')
-    get_parser.add_argument('destination', type=str,
-                            help='Destination of the boilerplate to be saved')
+    pull_parser.add_argument('path', type=str,
+                            help='Path of the boilerplate to be downloaded')
+    pull_parser.add_argument('name', type=str,
+                            help='Name for the boilerplate to be downloaded')
 
     remove_parser.add_argument('name', type=str,
                                help='Name for the boilerplate to be removed')
@@ -190,16 +173,14 @@ if __name__ == '__main__':
     args = setup_args()
     set_logger(is_verbose=args.is_verbose)
 
-    config = Config()
-    config.initialize()
+    boil = Boilerplates()
+    boil.initialize()
 
-    if args.command == 'list':
-        list_boilerplates(config)
-    if args.command == 'get':
-        get_boilerplate(args.destination, args.path)
-    elif args.command == 'add':
-        config.add_boilerplate(name=args.name, target=args.target)
+    if args.command == 'pull':
+        boil.pull(args.path, name=args.name)
+    elif args.command == 'ls':
+        boil.list()
     elif args.command == 'rm':
-        config.remove_boilerplate(name=args.name)
+        boil.remove(name=args.name)
     elif args.command == 'create':
-        create_boilerplate(config, name=args.name, target=args.target)
+        boil.create(name=args.name, target=args.target)

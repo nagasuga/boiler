@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='boiler',
-    version='0.1.0',
+    version='0.2.0',
     #packages=['boiler'],
     install_requires=[],
     dependency_links=[],
@@ -12,5 +12,5 @@ setup(
     url='http://github.com/nagasuga/boiler',
     keywords=[],
     classifiers=[],
-    scripts=['bin/boiler', 'bin/boiler-config'],
+    scripts=['bin/boiler'],
 )
