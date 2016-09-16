@@ -28,7 +28,6 @@ class Config(object):
         self.initialize()
 
     def initialize(self):
-        print('Config.init', self.file_path)
         if not os.path.exists(self.file_path):
             logging.info('Creating config: {}'.format(self.file_path))
             self.save()
