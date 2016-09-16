@@ -16,21 +16,15 @@ Usage
 =====
 
 ```
-boiler [-h] [-v] {list,add,rm,create} ...
+boiler [-h] [-v] {pull,ls,rm,create} ...
 
 CLI for creating boilerplate files, directories, and structures
 
 positional arguments:
-  {list,add,rm,create}  Sub-command help
-    list                List all saved boilerplates
-    add                 Add boilerplate
-    get                 Downloads boilerplate from repository and set it up in given destination
-    rm                  Remove boilerplates
-    create              Create boilerplate
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -v                    Verbose mode to print more information
+    pull               Download boilerplate
+    ls                 List all saved boilerplates
+    rm                 Remove boilerplates
+    create             Create boilerplate
 ```
 
 
